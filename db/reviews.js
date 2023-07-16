@@ -37,6 +37,23 @@ async function getAllReviews() {
   }
 }
 
+async function getReviewsByProductId(productId) {
+  try {
+    const { rows: reviews } = await client.query(
+      `
+      SELECT r.*, u."firstName" AS "creatorName" FROM reviews r
+      JOIN users u ON r."creatorId" = u.id
+      WHERE "productId" = $1
+      `,
+      [productId]
+    );
+
+    return reviews;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
 async function getReviewsByUserId(userId) {
   try {
     const { rows: reviews } = await client.query(
@@ -73,7 +90,7 @@ async function getReviewById(id) {
   }
 }
 
-async function updateReview({ productId, ...fields }) {
+async function updateReview({ productId, creatorId, ...fields }) {
   //Add a check that editer is the same user are the review creator
 
   const setString = Object.keys(fields)
@@ -91,7 +108,7 @@ async function updateReview({ productId, ...fields }) {
       `
     UPDATE reviews
     SET ${setString}
-    WHERE "productId"=${productId}
+    WHERE "productId"=${productId} AND "creatorId" = ${creatorId}
     RETURNING *;
   `,
       Object.values(fields)
@@ -103,17 +120,17 @@ async function updateReview({ productId, ...fields }) {
   }
 }
 
-async function destroyReview(productId) {
+async function destroyReview({ productId, creatorId }) {
   try {
     const {
       rows: [review],
     } = await client.query(
       `
       DELETE FROM reviews 
-      WHERE "productId"=$1
+      WHERE "productId"=$1 AND "creatorId" = $2
       RETURNING *;
     `,
-      [productId]
+      [productId, creatorId]
     );
 
     return review;
@@ -130,6 +147,7 @@ module.exports = {
   getAllReviews,
   getReviewsByUserId,
   getReviewById,
+  getReviewsByProductId,
   updateReview,
   destroyReview,
 };

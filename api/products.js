@@ -4,9 +4,9 @@ const productsRouter = express.Router();
 const {
   getAllProducts,
   createProduct,
-  getProductById,
   updateProduct,
   destroyProduct,
+  getReviewsByProductId,
 } = require("../db");
 
 const { requireUser, requireAdmin } = require("./utils");
@@ -19,10 +19,28 @@ productsRouter.use((req, res, next) => {
 // GET /products
 
 productsRouter.get("/", async (req, res, next) => {
+  const addReviews = async (productArray) => {
+    return Promise.all(
+      productArray.map(async (product) => {
+        product.reviews = (await getReviewsByProductId(product.id)) || [];
+        if (product.reviews[0]) {
+          let reviewSum = 0;
+          product.reviews.forEach((review) => {
+            reviewSum = reviewSum + review.rating;
+          });
+          product.averageReview = reviewSum / product.reviews.length;
+        } else product.averageReview = null;
+        // console.log(product);
+        return product;
+      })
+    );
+  };
+
   try {
     const products = await getAllProducts();
 
     if (products) {
+      await addReviews(products);
       res.send({
         success: true,
         data: {
@@ -42,7 +60,7 @@ productsRouter.get("/", async (req, res, next) => {
 
 // POST /products
 
-productsRouter.post("/", requireAdmin, requireUser, async (req, res, next) => {
+productsRouter.post("/", requireUser, requireAdmin, async (req, res, next) => {
   try {
     const product = await createProduct(req.body);
 
@@ -50,7 +68,7 @@ productsRouter.post("/", requireAdmin, requireUser, async (req, res, next) => {
       res.send({
         success: true,
         data: {
-          message: "Product added to inventory",
+          message: `${product.name} added to inventory`,
           product,
         },
       });
@@ -84,7 +102,7 @@ productsRouter.patch(
         res.send({
           success: true,
           data: {
-            message: "Product has been updated",
+            message: `${updatedProduct.name} has been updated`,
             product: updatedProduct,
           },
         });
@@ -116,7 +134,7 @@ productsRouter.delete(
         res.send({
           success: true,
           data: {
-            message: "Product has been deleted from inventory",
+            message: `${deletedProduct.name} has been deleted from inventory`,
             product: deletedProduct,
           },
         });

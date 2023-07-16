@@ -1,7 +1,16 @@
 const express = require("express");
 const ordersRouter = express.Router();
 const { requireUser, requireAdmin } = require("./utils");
-const { getAllOrders, getOrdersByUserId, createOrder } = require("../db");
+const { addProductsToOrder } = require("../db/utils");
+const {
+  getAllOrders,
+  getOrdersByUserId,
+  createOrder,
+  updateOrder,
+  getUserById,
+  getOrderById,
+  getCartByUserId,
+} = require("../db");
 
 ordersRouter.use((req, res, next) => {
   console.log("Making request to /api/orders");
@@ -32,14 +41,23 @@ ordersRouter.get(
   requireAdmin,
   async (req, res, next) => {
     const { userId } = req.params;
+    const user = await getUserById(userId);
     try {
-      const usersOrders = await getOrdersByUserId(userId);
-      res.send({
-        success: true,
-        data: {
-          orders: usersOrders,
-        },
-      });
+      const usersOrders = await getOrdersByUserId(user);
+      console.log(usersOrders);
+      if (usersOrders[0]) {
+        res.send({
+          success: true,
+          data: {
+            orders: usersOrders,
+          },
+        });
+      } else {
+        next({
+          name: "NoOrdersExist",
+          message: "No orders exist for that user",
+        });
+      }
     } catch (err) {
       console.error(err);
     }
@@ -54,13 +72,13 @@ ordersRouter.get(
 
 ordersRouter.post("/", requireUser, async (req, res, next) => {
   try {
-    const newOrder = await createOrder({ userId: req.user.id });
-    if (newOrder) {
+    const newCart = await createOrder({ userId: req.user.id });
+    if (newCart) {
       res.send({
         success: true,
         data: {
           message: "New Persistant Cart Created",
-          order: newOrder,
+          cart: newCart,
         },
       });
     } else {
@@ -73,5 +91,84 @@ ordersRouter.post("/", requireUser, async (req, res, next) => {
     console.error(err);
   }
 });
+
+// PATCH /orders/:orderId/place
+
+ordersRouter.patch("/place", requireUser, async (req, res, next) => {
+  try {
+    const orderToUpdate = await getCartByUserId(req.user);
+
+    if (!orderToUpdate) {
+      next({
+        name: "OrderDoesNotExist",
+        message: "There is no open cart for this user",
+      });
+    }
+
+    await updateOrder({
+      id: orderToUpdate.id,
+      orderStatus: "Order Placed",
+    });
+
+    orderToUpdate.orderStatus = "Order Placed";
+
+    res.send({
+      success: true,
+      data: {
+        message: "Order has been placed",
+        order: orderToUpdate,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+  }
+});
+
+// PATCH /orders/:orderId/complete
+
+ordersRouter.patch(
+  "/:orderId/complete",
+  requireUser,
+  requireAdmin,
+  async (req, res, next) => {
+    const { orderId } = req.params;
+
+    try {
+      const orderToUpdate = await getOrderById(orderId);
+      if (!orderToUpdate) {
+        return next({
+          name: "OrderDoesNotExist",
+          message: "There is no order that matches the given order ID",
+        });
+      }
+
+      if (orderToUpdate.orderStatus === "Order Complete") {
+        next({
+          name: "OrderAlreadyCompleted",
+          message: "Order has already been marked as completed",
+        });
+      }
+
+      const completedOrder = await updateOrder({
+        id: orderId,
+        orderStatus: "Order Complete",
+      });
+
+      await addProductsToOrder({ order: completedOrder });
+
+      res.send({
+        success: true,
+        data: {
+          message: "Order has been shipped/completed",
+          order: completedOrder,
+        },
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+);
+
+ordersRouter;
 
 module.exports = ordersRouter;

@@ -5,18 +5,30 @@ async function createProduct({
   description,
   price,
   stockQuantity,
+  imageURL,
   size,
+  category,
+  isFeatured,
 }) {
   try {
     const {
       rows: [product],
     } = await client.query(
       `
-    INSERT INTO products (name, description, price, "stockQuantity", size)
-    VALUES ($1, $2, $3, $4, $5)
+    INSERT INTO products (name, description, price, "stockQuantity", "imageURL", size, category, "isFeatured")
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     RETURNING *
     `,
-      [name, description, price, stockQuantity, size]
+      [
+        name,
+        description,
+        price,
+        stockQuantity,
+        imageURL,
+        size,
+        category,
+        isFeatured,
+      ]
     );
 
     if (product) {
@@ -91,7 +103,9 @@ async function updateProduct({ id, ...fields }) {
 
 async function destroyProduct(id) {
   try {
-    const { rows: products } = await client.query(
+    const {
+      rows: [product],
+    } = await client.query(
       `
       DELETE FROM products 
       WHERE id=$1
@@ -100,7 +114,7 @@ async function destroyProduct(id) {
       [id]
     );
 
-    return products;
+    return product;
   } catch (error) {
     console.error(err);
   }

@@ -9,6 +9,7 @@ const {
   getCartByUserId,
   getReviewsByUserId,
   updateUser,
+  getUserByEmail,
 } = require("../db");
 
 const { requireUser, requireAdmin } = require("./utils");
@@ -24,6 +25,15 @@ usersRouter.use((req, res, next) => {
 
 usersRouter.post("/register", async (req, res, next) => {
   try {
+    const existingUserCheck = await getUserByEmail(req.body.email);
+    if (existingUserCheck) {
+      next({
+        name: "UserExists",
+        message:
+          "An account using that email address already exists, please login",
+      });
+    }
+
     const user = await createUser(req.body);
 
     if (user) {
@@ -60,8 +70,9 @@ usersRouter.post("/register", async (req, res, next) => {
 //Login Existing User
 
 usersRouter.post("/login", async (req, res, next) => {
+  const { email, password } = req.body;
   try {
-    const user = await loginUser(req.body);
+    const user = await loginUser({ email: email.toLowerCase(), password });
 
     if (user) {
       const token = jwt.sign(
@@ -76,7 +87,7 @@ usersRouter.post("/login", async (req, res, next) => {
       res.send({
         success: true,
         data: {
-          message: "You are logged in!",
+          message: `You are logged in ${user.firstName}!`,
           token,
           user,
         },
@@ -119,6 +130,7 @@ usersRouter.patch("/profile", requireUser, async (req, res, next) => {
     : req.user.firstName;
   try {
     const updatedUser = await updateUser({ userId: req.user.id, ...req.body });
+    delete updatedUser.password;
     res.send({
       success: true,
       data: {
